@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="d1b03f96-cced-44ac-b9ad-853636e260c1" >
+		<http:listener-connection host="0.0.0.0" port="8089" />
+	</http:listener-config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="d0fec1ab-5205-4949-b42d-3de7210dd420" basePath="/api">
+		<http:request-connection host="worldtimeapi.org" />
+	</http:request-config>
+	<flow name="karatedemo-cicdFlow" doc:id="39acb995-67b0-4a5a-ad3f-e68bb7b204c8" >
+		<http:listener doc:name="Listener" doc:id="62de7cfe-4199-44bc-98e1-854147da06de" config-ref="HTTP_Listener_config" path="/timezone/{region}/{city}"/>
+		<flow-ref doc:name="Call World Time API" doc:id="0eb7cee2-8ab1-4d3c-b3b3-f62009e0f19c" name="worldtimeapi"/>
+		<logger level="INFO" doc:name="Logger" doc:id="a4e3553c-a14d-46a8-b123-485695ddb0f1" message="ON ERROR CONTINUE"/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="bf1e6c33-0542-4ded-899c-c723ca79bb25" type="ANY">
+				<logger level="INFO" doc:name="Logger" doc:id="028f61ea-f606-4b57-a798-2e54d6db0acd" message="Project has failed to get data from API" />
+				<ee:transform doc:name="Transform Message" doc:id="0fb62f07-5caa-47b1-9562-b250ab9d7470" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	response:
+	{
+		errorDescription: error.description,
+		errorType: error.errorType
+	}
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+	<flow name="worldtimeapi" doc:id="49ac3130-850a-4cee-bf9a-63f27ddc4b42" >
+		<http:request method="GET" doc:name="Request" doc:id="607fc527-4f26-4d20-b0c4-2b7f5ed14914" config-ref="HTTP_Request_configuration" path="/timezone/{region}/{city}" responseTimeout="2000">
+			<http:uri-params><![CDATA[#[output application/java
+---
+{
+	city : attributes.uriParams.city,
+	region : attributes.uriParams.region
+}]]]></http:uri-params>
+		</http:request>
+		<logger level="INFO" doc:name="Logger" doc:id="8ebd6299-f5c8-4a51-b064-d0954c9a0403" message="HTTP Request Failed, Log skipped."/>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="c15b7bd6-8678-4327-93c3-16cb6dbf3cbe" >
+				<ee:transform doc:name="Transform Message" doc:id="8b5ddaa2-55f5-4c82-a659-f8dd1665c2ae">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	response:
+	{
+		errorMessage: error.description
+	}
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+</mule>
